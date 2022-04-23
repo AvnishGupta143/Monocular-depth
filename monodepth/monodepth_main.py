@@ -18,7 +18,8 @@ import argparse
 import re
 import time
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+# import tensorflow.contrib.slim as slim
+import tf_slim as slim
 
 from monodepth_model import *
 from monodepth_dataloader import *

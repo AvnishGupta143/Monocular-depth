@@ -18,7 +18,8 @@ import argparse
 import re
 import time
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+# import tensorflow.contrib.slim as slim
+import tf_slim as slim
 import scipy.misc
 import matplotlib.pyplot as plt
 
