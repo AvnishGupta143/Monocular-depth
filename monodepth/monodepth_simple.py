@@ -64,7 +64,7 @@ def test_simple(params):
     sess = tf.Session(config=config)
 
     # SAVER
-    train_saver = tf.train.Saver()
+    # train_saver = tf.train.Saver()
 
     # INIT
     sess.run(tf.global_variables_initializer())
@@ -74,9 +74,34 @@ def test_simple(params):
 
     # RESTORE
     restore_path = args.checkpoint_path.split(".")[0]
-    train_saver.restore(sess, restore_path)
 
-    disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
+    # Credit to: https://gist.github.com/iganichev/d2d8a0b1abc6b15d4a07de83171163d4
+    def optimistic_restore(session, save_file):
+        reader = tf.train.NewCheckpointReader(save_file)
+        saved_shapes = reader.get_variable_to_shape_map()
+        var_names = sorted([(var.name, var.name.split(':')[0]) for
+                            var in tf.global_variables()
+                            if var.name.split(':')[0] in saved_shapes])
+        restore_vars = []
+        name2var = dict(zip(map(lambda x: x.name.split(':')[0],
+                                tf.global_variables()),
+                            tf.global_variables()))
+        with tf.variable_scope('', reuse=True):
+            for var_name, saved_var_name in var_names:
+                curr_var = name2var[saved_var_name]
+                var_shape = curr_var.get_shape().as_list()
+                if var_shape == saved_shapes[saved_var_name]:
+                    restore_vars.append(curr_var)
+
+        saver = tf.train.Saver(restore_vars)
+        saver.restore(session, save_file)
+
+    optimistic_restore(sess, restore_path)
+
+    # train_saver.restore(sess, restore_path)
+
+    # disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
+    disp = sess.run(model.segmentation, feed_dict={left: input_images})
     disp_pp = post_process_disparity(disp.squeeze()).astype(np.float32)
 
     output_directory = os.path.dirname(args.image_path)
