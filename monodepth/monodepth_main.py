@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementatio
 parser.add_argument('--mode',                      type=str,   help='train or test', default='train')
 parser.add_argument('--model_name',                type=str,   help='model name', default='monodepth')
 parser.add_argument('--encoder',                   type=str,   help='type of encoder, vgg or resnet50', default='vgg')
-parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti, or cityscapes', default='kitti')
+parser.add_argument('--dataset',                   type=str,   help='dataset to train on, kitti, or cityscapes', default='cityscapes')
 parser.add_argument('--data_path',                 type=str,   help='path to the data', required=True)
 parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file', required=True)
 parser.add_argument('--input_height',              type=int,   help='input height', default=256)
@@ -96,10 +96,12 @@ def train(params):
         dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
+        semantic = dataloader.semantic_image_batch
 
         # split for each gpu
         left_splits  = tf.split(left,  args.num_gpus, 0)
         right_splits = tf.split(right, args.num_gpus, 0)
+        semantic_splits = tf.split(semantic, args.num_gpus, 0)
 
         tower_grads  = []
         tower_losses = []
@@ -108,7 +110,7 @@ def train(params):
             for i in range(args.num_gpus):
                 with tf.device('/gpu:%d' % i):
 
-                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], reuse_variables, i)
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], semantic_splits[i], reuse_variables, i)
 
                     loss = model.total_loss
                     tower_losses.append(loss)

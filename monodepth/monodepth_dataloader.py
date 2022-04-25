@@ -27,6 +27,7 @@ class MonodepthDataloader(object):
 
         self.left_image_batch  = None
         self.right_image_batch = None
+        self.semantic_image_batch = None
 
         input_queue = tf.train.string_input_producer([filenames_file], shuffle=False)
         line_reader = tf.TextLineReader()
@@ -41,14 +42,17 @@ class MonodepthDataloader(object):
         else:
             left_image_path  = tf.string_join([self.data_path, split_line[0]])
             right_image_path = tf.string_join([self.data_path, split_line[1]])
+            semantic_image_path = tf.string_join([self.data_path, split_line[2]])
             left_image_o  = self.read_image(left_image_path)
             right_image_o = self.read_image(right_image_path)
+            semantic_image_o = self.read_image(semantic_image_path)
 
         if mode == 'train':
             # randomly flip images
             do_flip = tf.random_uniform([], 0, 1)
             left_image  = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(right_image_o), lambda: left_image_o)
             right_image = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(left_image_o),  lambda: right_image_o)
+            semantic_image = tf.cond(do_flip > 0.5, lambda: tf.image.flip_left_right(semantic_image_o),  lambda: semantic_image_o)
 
             # randomly augment images
             do_augment  = tf.random_uniform([], 0, 1)
@@ -56,11 +60,12 @@ class MonodepthDataloader(object):
 
             left_image.set_shape( [None, None, 3])
             right_image.set_shape([None, None, 3])
+            semantic_image.set_shape([None, None, 3])
 
             # capacity = min_after_dequeue + (num_threads + a small safety margin) * batch_size
             min_after_dequeue = 2048
             capacity = min_after_dequeue + 4 * params.batch_size
-            self.left_image_batch, self.right_image_batch = tf.train.shuffle_batch([left_image, right_image],
+            self.left_image_batch, self.right_image_batch, self.semantic_image_batch = tf.train.shuffle_batch([left_image, right_image, semantic_image],
                         params.batch_size, capacity, min_after_dequeue, params.num_threads)
 
         elif mode == 'test':
@@ -70,6 +75,9 @@ class MonodepthDataloader(object):
             if self.params.do_stereo:
                 self.right_image_batch = tf.stack([right_image_o,  tf.image.flip_left_right(right_image_o)],  0)
                 self.right_image_batch.set_shape( [2, None, None, 3])
+
+            self.semantic_image_batch = tf.stack([semantic_image_o],  0)
+            self.semantic_image_batch.set_shape( [1, None, None, 3])
 
     def augment_image_pair(self, left_image, right_image):
         # randomly shift gamma

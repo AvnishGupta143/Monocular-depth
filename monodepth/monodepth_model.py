@@ -40,12 +40,13 @@ monodepth_parameters = namedtuple('parameters',
 class MonodepthModel(object):
     """monodepth model"""
 
-    def __init__(self, params, mode, left, right, segmentated, reuse_variables=None, model_index=0):
+    def __init__(self, params, mode, left, right, segmented, reuse_variables=None, model_index=0):
         self.params = params
         self.mode = mode
         self.left = left
         self.right = right
-        self.segmentated = segmentated
+        self.segmented = segmented
+        self.NUM_SEMANTIC_CLASSES = 32  # TODO: pass this in?
         self.model_collection = ['model_' + str(model_index)]
 
         self.reuse_variables = reuse_variables
@@ -269,8 +270,8 @@ class MonodepthModel(object):
 
             upconv1_semantic = upconv(iconv2_semantic, 16, 3, 2)  # H
             # concat1_semantic = tf.concat([upconv1_semantic, udisp2_semantic], 3)  # Removed disp section from semantic
-            concat1_semantic = tf.concat([upconv1_semantic], 3)
-            iconv1_semantic = conv(concat1_semantic, 16, 3, 1)
+            # concat1_semantic = tf.concat([upconv1_semantic], 3)
+            iconv1_semantic = conv(upconv1_semantic, self.NUM_SEMANTIC_CLASSES, 1, 1, activation_fn=tf.nn.softmax)
             # self.disp1_semantic = self.get_disp(iconv1_semantic)  # Removed disp section from semantic
 
             self.seg_decoder_out = iconv1_semantic
@@ -400,6 +401,9 @@ class MonodepthModel(object):
         with tf.variable_scope('segmentation'):
             self.segmentation = self.seg_decoder_out
 
+        with tf.variable_scope('dual_output'):
+            self.dual_output = [self.disp_left_est[0], self.segmentation]
+
         if self.mode == 'test':
             return
 
@@ -458,16 +462,14 @@ class MonodepthModel(object):
 
             # (ADDED) Segmentation LOSS
             # TODO: finish this and check it
-            self.seg_loss_1 = self.segmentated - self.segmentation # Loss function here
-            self.seg_loss_2 = 0
+            self.seg_loss = tf.losses.sparse_softmax_cross_entropy(self.segmented, self.seg_decoder_out)
 
             # TOTAL LOSS
             self.subtotal_depth_losses = self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss
-            self.subtotal_segmentation_losses = self.seg_loss_1 + self.seg_loss_2
             # TODO: adjust multipliers for losses to proper scales
             SEGMENTATION_LOSS_SCALER = 1
             DEPTH_LOSS_SCALER = 1
-            self.total_loss = self.subtotal_depth_losses * DEPTH_LOSS_SCALER + self.subtotal_segmentation_losses * SEGMENTATION_LOSS_SCALER
+            self.total_loss = self.subtotal_depth_losses * DEPTH_LOSS_SCALER + self.seg_loss * SEGMENTATION_LOSS_SCALER
 
     def build_summaries(self):
         # SUMMARIES

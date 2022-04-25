@@ -51,7 +51,8 @@ def test_simple(params):
     """Test function."""
 
     left  = tf.placeholder(tf.float32, [2, args.input_height, args.input_width, 3])
-    model = MonodepthModel(params, "test", left, None)
+    segmented  = tf.placeholder(tf.float32, [2, args.input_height, args.input_width, 3])
+    model = MonodepthModel(params, "test", left, None, segmented)
 
     input_image = scipy.misc.imread(args.image_path, mode="RGB")
     original_height, original_width, num_channels = input_image.shape
@@ -101,7 +102,8 @@ def test_simple(params):
     # train_saver.restore(sess, restore_path)
 
     # disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
-    disp = sess.run(model.segmentation, feed_dict={left: input_images})
+    disp, seg = sess.run(model.dual_output, feed_dict={left: input_images, segmented: input_images})
+
     disp_pp = post_process_disparity(disp.squeeze()).astype(np.float32)
 
     output_directory = os.path.dirname(args.image_path)
