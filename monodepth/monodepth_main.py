@@ -96,7 +96,7 @@ def train(params):
         dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
-        semantic = dataloader.semantic_image_batch
+        semantic = tf.cast(dataloader.semantic_image_batch, tf.int32)  # [:, :, 0]
 
         # split for each gpu
         left_splits  = tf.split(left,  args.num_gpus, 0)
