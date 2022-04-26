@@ -1,4 +1,6 @@
 import glob
+
+import cv2
 import numpy as np
 import os
 
@@ -25,6 +27,16 @@ for subfolder in subfolders:
         base_path = "/".join(left_p.split("/")[:-2])
         right_p = left_p.replace(left, right)
         semantic_p = left_p.replace(left, semantic, 1).replace(left, semantic_subname)
+        try:
+            a = cv2.imread(os.path.join(base_path, left_p))
+            b = cv2.imread(os.path.join(base_path, right_p))
+            if a.shape[2] < 3 or b.shape[2] < 3:
+                print("bad")
+                continue
+        except:
+            print("bad")
+            continue
+        # print("g", end='')
         if right_p in right_imgs_set and semantic_p in semantic_imgs_set:
             # print(left_p, right_p, semantic_p)
             f.write("{} {} {}\n".format(left_p.replace(main_dir, ""),

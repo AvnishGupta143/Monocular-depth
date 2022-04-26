@@ -27,13 +27,27 @@ from monodepth_model import *
 from monodepth_dataloader import *
 from average_gradients import *
 
+
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        # Currently, memory growth needs to be the same across GPUs
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        # Memory growth must be set before GPUs have been initialized
+        print(e)
+
+
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
 
 parser.add_argument('--encoder',          type=str,   help='type of encoder, vgg or resnet50', default='vgg')
 parser.add_argument('--image_path',       type=str,   help='path to the image', required=True)
 parser.add_argument('--checkpoint_path',  type=str,   help='path to a specific checkpoint to load', required=True)
-parser.add_argument('--input_height',     type=int,   help='input height', default=256)
-parser.add_argument('--input_width',      type=int,   help='input width', default=512)
+parser.add_argument('--input_height',     type=int,   help='input height', default=128)
+parser.add_argument('--input_width',      type=int,   help='input width', default=256)
 
 args = parser.parse_args()
 
@@ -101,8 +115,8 @@ def test_simple(params):
 
     # train_saver.restore(sess, restore_path)
 
-    # disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
-    disp, seg = sess.run(model.dual_output, feed_dict={left: input_images, segmented: input_images})
+    disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
+    # disp, seg = sess.run(model.dual_output, feed_dict={left: input_images, segmented: input_images})
 
     disp_pp = post_process_disparity(disp.squeeze()).astype(np.float32)
 

@@ -45,7 +45,8 @@ class MonodepthDataloader(object):
             semantic_image_path = tf.string_join([self.data_path, split_line[2]])
             left_image_o  = self.read_image(left_image_path)
             right_image_o = self.read_image(right_image_path)
-            semantic_image_o = self.read_image(semantic_image_path)
+            # we only need 1 channel of semantic (they're all same), but need to keep 3 dim tensor still
+            semantic_image_o = self.read_image(semantic_image_path)[:, :, 0:1]
 
         if mode == 'train':
             # randomly flip images
@@ -60,7 +61,7 @@ class MonodepthDataloader(object):
 
             left_image.set_shape( [None, None, 3])
             right_image.set_shape([None, None, 3])
-            semantic_image.set_shape([None, None, 3])
+            semantic_image.set_shape([None, None, 1])
 
             # capacity = min_after_dequeue + (num_threads + a small safety margin) * batch_size
             min_after_dequeue = 2048
