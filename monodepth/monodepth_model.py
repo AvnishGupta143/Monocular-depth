@@ -52,56 +52,55 @@ monodepth_parameters = namedtuple('parameters',
 
 
 
+# def get_model():
+#     model_input = tf.keras.layers.Input(shape=(256, 256, 3))
 
-def get_model():
-    model_input = tf.keras.layers.Input(shape=(256, 256, 3))
+#         # Entry block
+#     x = layers.Conv2D(32, 3, strides=2, padding="same")(model_input)
+#     x = layers.BatchNormalization()(x)
+#     x = layers.Activation("relu")(x)
 
-        # Entry block
-    x = layers.Conv2D(32, 3, strides=2, padding="same")(model_input)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation("relu")(x)
+#     previous_block_activation = x  # Set aside residual
 
-    previous_block_activation = x  # Set aside residual
+#     for filters in [64, 128, 256]:
+#         x = layers.Activation("relu")(x)
+#         x = layers.SeparableConv2D(filters, 3, padding="same")(x)
+#         x = layers.BatchNormalization()(x)
 
-    for filters in [64, 128, 256]:
-        x = layers.Activation("relu")(x)
-        x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
+#         x = layers.Activation("relu")(x)
+#         x = layers.SeparableConv2D(filters, 3, padding="same")(x)
+#         x = layers.BatchNormalization()(x)
 
-        x = layers.Activation("relu")(x)
-        x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
+#         x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
 
-        x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
+#         # Project residual
+#         residual = layers.Conv2D(filters, 1, strides=2, padding="same")(
+#             previous_block_activation
+#         )
 
-        # Project residual
-        residual = layers.Conv2D(filters, 1, strides=2, padding="same")(
-            previous_block_activation
-        )
+#         x = layers.add([x, residual])  # Add back residual
+#         previous_block_activation = x
 
-        x = layers.add([x, residual])  # Add back residual
-        previous_block_activation = x
+#     for filters in [256, 128, 64, 32]:
+#         x = layers.Activation("relu")(x)
+#         x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
+#         x = layers.BatchNormalization()(x)
 
-    for filters in [256, 128, 64, 32]:
-        x = layers.Activation("relu")(x)
-        x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
+#         x = layers.Activation("relu")(x)
+#         x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
+#         x = layers.BatchNormalization()(x)
 
-        x = layers.Activation("relu")(x)
-        x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
+#         x = layers.UpSampling2D(2)(x)
 
-        x = layers.UpSampling2D(2)(x)
+#             # Project residual
+#         residual = layers.UpSampling2D(2)(previous_block_activation)
+#         residual = layers.Conv2D(filters, 1, padding="same")(residual)
+#         x = layers.add([x, residual])  # Add back residual
+#         previous_block_activation = x 
 
-            # Project residual
-        residual = layers.UpSampling2D(2)(previous_block_activation)
-        residual = layers.Conv2D(filters, 1, padding="same")(residual)
-        x = layers.add([x, residual])  # Add back residual
-        previous_block_activation = x 
-
-    outputs = layers.Conv2D(20, 3, activation="softmax", padding="same")(x)
-    model = keras.Model(model_input, outputs)
-    return model
+#     outputs = layers.Conv2D(20, 3, activation="softmax", padding="same")(x)
+#     model = keras.Model(model_input, outputs)
+#     return model
 
 
 
@@ -109,13 +108,13 @@ def get_model():
 class MonodepthModel(object):
     """monodepth model"""
 
-    def __init__(self, params, skipSemantic5, mode, left, right, reuse_variables=None, model_index=0):
+    def __init__(self, params, mode, left, right, reuse_variables=None, model_index=0):
         self.params = params
         self.mode = mode
         self.left = left
         self.right = right
         self.model_collection = ['model_' + str(model_index)]
-        self.skipSemantic5 = skipSemantic5
+        # self.skipSemantic5 = skipSemantic5
 
         self.reuse_variables = reuse_variables
 
@@ -242,7 +241,55 @@ class MonodepthModel(object):
 
 
 
+    def get_model(self):
+        model_input = tf.keras.layers.Input(shape=(256, 256, 3))
 
+            # Entry block
+        x = layers.Conv2D(32, 3, strides=2, padding="same")(model_input)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation("relu")(x)
+
+        previous_block_activation = x  # Set aside residual
+
+        for filters in [64, 128, 256]:
+            x = layers.Activation("relu")(x)
+            x = layers.SeparableConv2D(filters, 3, padding="same")(x)
+            x = layers.BatchNormalization()(x)
+
+            x = layers.Activation("relu")(x)
+            x = layers.SeparableConv2D(filters, 3, padding="same")(x)
+            x = layers.BatchNormalization()(x)
+
+            x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
+
+            # Project residual
+            residual = layers.Conv2D(filters, 1, strides=2, padding="same")(
+                previous_block_activation
+            )
+
+            x = layers.add([x, residual])  # Add back residual
+            previous_block_activation = x
+
+        for filters in [256, 128, 64, 32]:
+            x = layers.Activation("relu")(x)
+            x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
+            x = layers.BatchNormalization()(x)
+
+            x = layers.Activation("relu")(x)
+            x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
+            x = layers.BatchNormalization()(x)
+
+            x = layers.UpSampling2D(2)(x)
+
+                # Project residual
+            residual = layers.UpSampling2D(2)(previous_block_activation)
+            residual = layers.Conv2D(filters, 1, padding="same")(residual)
+            x = layers.add([x, residual])  # Add back residual
+            previous_block_activation = x 
+
+        outputs = layers.Conv2D(20, 3, activation="softmax", padding="same")(x)
+        model = keras.Model(model_input, outputs)
+        return model
     # def create_model(self):
 
     #     inputs = tf.keras.layers.Input(shape=(256, 256, 3))
@@ -385,13 +432,13 @@ class MonodepthModel(object):
         else:
             upconv = self.upconv
 
-        # with tf.variable_scope('semantic-encoder'):
-        #     unet_model = self.get_model()
-        #     unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
-        #     for layer in unet_model.layers:
-        #         layer.trainable = False
+        with tf.variable_scope('semantic-encoder'):
+            unet_model = self.get_model()
+            unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
+            for layer in unet_model.layers:
+                layer.trainable = False
 
-        #     skipSemantic5 = tf.keras.models.Model(inputs=unet_model.input, outputs=unet_model.get_layer('batch_normalization_8').output)
+            skipSemantic5 = tf.keras.models.Model(inputs=unet_model.input, outputs=unet_model.get_layer('batch_normalization_8').output)
 
 
 
@@ -452,9 +499,9 @@ class MonodepthModel(object):
             concat5 = tf.concat([upconv5, skip4], 3)
             # passing skipSemantic5 into a convolution layer to make the channels 256
             # convskip = conv(skipSemantic5,  256, 3, 1)
-            # concatsemantic5 = tf.concat([concat5, self.skipSemantic5], 3)
-            # iconv5  = conv(concatsemantic5,  256, 3, 1)
-            iconv5  = conv(concat5,  256, 3, 1)
+            concatsemantic5 = tf.concat([concat5, self.skipSemantic5], 3)
+            iconv5  = conv(concatsemantic5,  256, 3, 1)
+            # iconv5  = conv(concat5,  256, 3, 1)
 
             upconv4 = upconv(iconv5, 128, 3, 2) #H/8
             concat4 = tf.concat([upconv4, skip3], 3)

@@ -43,7 +43,7 @@ parser.add_argument('--disp_gradient_loss_weight', type=float, help='disparity s
 parser.add_argument('--do_stereo',                             help='if set, will train the stereo model', action='store_true')
 parser.add_argument('--wrap_mode',                 type=str,   help='bilinear sampler wrap mode, edge or border', default='border')
 parser.add_argument('--use_deconv',                            help='if set, will use transposed convolutions', action='store_true')
-parser.add_argument('--num_gpus',                  type=int,   help='number of GPUs to use for training', default=2)
+parser.add_argument('--num_gpus',                  type=int,   help='number of GPUs to use for training', default=1)
 parser.add_argument('--num_threads',               type=int,   help='number of threads to use for data loading', default=8)
 parser.add_argument('--output_directory',          type=str,   help='output directory for test disparities, if empty outputs to checkpoint folder', default='')
 parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
@@ -109,7 +109,7 @@ def train(params):
         reuse_variables = None
         with tf.variable_scope(tf.get_variable_scope()):
 
-            skipSemantic5 = None
+            # skipSemantic5 = None
             # with tf.device('/gpu:8'):
             #     unet_model = get_model()
             #     unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
@@ -124,21 +124,20 @@ def train(params):
             #     unet_model = self.get_model()
                 # for i in range(args.num_gpus):
             # for j, h in enumerate(['/gpu:8','/gpu:9']):
-            # for i in range(args.num_gpus):
+            for i in range(args.num_gpus):
+                with tf.device('/gpu:%d' % i):
+                # with tf.device('/gpu:9'):
 
-            # with tf.device('/gpu:%d' % i):
-            with tf.device('/gpu:9'):
+                    model = MonodepthModel(params, args.mode, left_splits[0], right_splits[0], reuse_variables,0)
 
-                model = MonodepthModel(params, skipSemantic5, args.mode, left_splits[0], right_splits[0], reuse_variables,0)
+                    loss = model.total_loss
+                    tower_losses.append(loss)
 
-                loss = model.total_loss
-                tower_losses.append(loss)
+                    reuse_variables = True
 
-                reuse_variables = True
+                    grads = opt_step.compute_gradients(loss)
 
-                grads = opt_step.compute_gradients(loss)
-
-                tower_grads.append(grads)
+                    tower_grads.append(grads)
 
         grads = average_gradients(tower_grads)
 
