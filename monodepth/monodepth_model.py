@@ -242,7 +242,8 @@ class MonodepthModel(object):
 
 
     def get_model(self):
-        model_input = tf.keras.layers.Input(shape=(256, 256, 3))
+        print("inside get_model()")
+        model_input = self.model_input # tf.keras.layers.Input(shape=(256, 256, 3))
 
             # Entry block
         x = layers.Conv2D(32, 3, strides=2, padding="same")(model_input)
@@ -252,6 +253,7 @@ class MonodepthModel(object):
         previous_block_activation = x  # Set aside residual
 
         for filters in [64, 128, 256]:
+            print("create filter (1)", filters)
             x = layers.Activation("relu")(x)
             x = layers.SeparableConv2D(filters, 3, padding="same")(x)
             x = layers.BatchNormalization()(x)
@@ -271,6 +273,7 @@ class MonodepthModel(object):
             previous_block_activation = x
 
         for filters in [256, 128, 64, 32]:
+            print("create filter (2)", filters)
             x = layers.Activation("relu")(x)
             x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
             x = layers.BatchNormalization()(x)
@@ -287,8 +290,11 @@ class MonodepthModel(object):
             x = layers.add([x, residual])  # Add back residual
             previous_block_activation = x 
 
+        print('build keras outputs')
         outputs = layers.Conv2D(20, 3, activation="softmax", padding="same")(x)
-        model = keras.Model(model_input, outputs)
+        print("finished building outputs\n", outputs)
+        model = keras.Model(inputs=model_input, outputs=outputs)
+        print("built keras model")
         return model
     # def create_model(self):
 
@@ -432,14 +438,16 @@ class MonodepthModel(object):
         else:
             upconv = self.upconv
 
+        print('load unet (next is var_scope')
         with tf.variable_scope('semantic-encoder'):
             unet_model = self.get_model()
+            print("load unet")
             unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
             for layer in unet_model.layers:
                 layer.trainable = False
 
             skipSemantic5 = tf.keras.models.Model(inputs=unet_model.input, outputs=unet_model.get_layer('batch_normalization_8').output)
-
+            print("skipSemantic5")
 
 
             # unet_model = self.create_model()
@@ -466,7 +474,7 @@ class MonodepthModel(object):
 
         #     # 16 X 16
             # skipSemantic5 = tf.keras.models.Model(inputs=unet_model.input, outputs=unet_model.get_layer('batch_normalization_8').output)
-            # skipSemantic5Output = skipSemantic5(unet_model.input)
+            skipSemantic5Output = skipSemantic5(self.model_input)
 
     
         with tf.variable_scope('encoder'):
@@ -499,7 +507,7 @@ class MonodepthModel(object):
             concat5 = tf.concat([upconv5, skip4], 3)
             # passing skipSemantic5 into a convolution layer to make the channels 256
             # convskip = conv(skipSemantic5,  256, 3, 1)
-            concatsemantic5 = tf.concat([concat5, self.skipSemantic5], 3)
+            concatsemantic5 = tf.concat([concat5, skipSemantic5Output], 3)
             iconv5  = conv(concatsemantic5,  256, 3, 1)
             # iconv5  = conv(concat5,  256, 3, 1)
 

@@ -127,9 +127,9 @@ def train(params):
             for i in range(args.num_gpus):
                 with tf.device('/gpu:%d' % i):
                 # with tf.device('/gpu:9'):
-
+                    print("main:130. Start model()")
                     model = MonodepthModel(params, args.mode, left_splits[0], right_splits[0], reuse_variables,0)
-
+                    print("created model")
                     loss = model.total_loss
                     tower_losses.append(loss)
 
@@ -139,6 +139,7 @@ def train(params):
 
                     tower_grads.append(grads)
 
+        print("~~~~~~~~~~~~GRADS~~~~~~~~~~~~~\n", tower_grads)
         grads = average_gradients(tower_grads)
 
         apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)
@@ -183,7 +184,7 @@ def train(params):
             before_op_time = time.time()
             _, loss_value = sess.run([apply_gradient_op, total_loss])
             duration = time.time() - before_op_time
-            if step and step % 100 == 0:
+            if step and step % 5 == 0:
                 examples_per_sec = params.batch_size / duration
                 time_sofar = (time.time() - start_time) / 3600
                 training_time_left = (num_total_steps / step - 1.0) * time_sofar
