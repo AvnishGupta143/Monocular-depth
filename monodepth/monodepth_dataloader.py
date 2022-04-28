@@ -45,8 +45,7 @@ class MonodepthDataloader(object):
             semantic_image_path = tf.string_join([self.data_path, split_line[2]])
             left_image_o  = self.read_image(left_image_path)
             right_image_o = self.read_image(right_image_path)
-            # we only need 1 channel of semantic (they're all same), but need to keep 3 dim tensor still
-            semantic_image_o = self.read_image(semantic_image_path)[:, :, 0:1]
+            semantic_image_o = self.read_semantic_image(semantic_image_path)
 
         if mode == 'train':
             # randomly flip images
@@ -77,8 +76,8 @@ class MonodepthDataloader(object):
                 self.right_image_batch = tf.stack([right_image_o,  tf.image.flip_left_right(right_image_o)],  0)
                 self.right_image_batch.set_shape( [2, None, None, 3])
 
-            self.semantic_image_batch = tf.stack([semantic_image_o],  0)
-            self.semantic_image_batch.set_shape( [1, None, None, 3])
+            self.semantic_image_batch = tf.stack([semantic_image_o, tf.image.flip_left_right(semantic_image_o)],  0)
+            self.semantic_image_batch.set_shape( [1, None, None, 1])
 
     def augment_image_pair(self, left_image, right_image):
         # randomly shift gamma
@@ -120,5 +119,28 @@ class MonodepthDataloader(object):
 
         image  = tf.image.convert_image_dtype(image,  tf.float32)
         image  = tf.image.resize_images(image,  [self.params.height, self.params.width], tf.image.ResizeMethod.AREA)
+
+        return image
+
+    def read_semantic_image(self, image_path):
+        # tf.decode_image does not return the image size, this is an ugly workaround to handle both jpeg and png
+        path_length = string_length_tf(image_path)[0]
+        file_extension = tf.substr(image_path, path_length - 3, 3)
+        file_cond = tf.equal(file_extension, 'jpg')
+
+        image = tf.cond(file_cond, lambda: tf.image.decode_jpeg(tf.read_file(image_path)),
+                        lambda: tf.image.decode_png(tf.read_file(image_path)))
+
+        # if the dataset is cityscapes, we crop the last fifth to remove the car hood
+        if self.dataset == 'cityscapes':
+            o_height = tf.shape(image)[0]
+            crop_height = (o_height * 4) // 5
+            image = image[:crop_height, :, :]
+
+        # image = tf.image.convert_image_dtype(image, tf.int64)
+        # we only need 1 channel of semantic (they're all same), but need to keep 3 dim tensor still
+        # semantic map is NOT float, it is int
+        # semantic image also not suited for resizing using any form of blend/average/area, since int classes
+        image = tf.image.resize_images(image, [self.params.height, self.params.width], tf.image.ResizeMethod.NEAREST_NEIGHBOR)[:, :, 0:1]
 
         return image

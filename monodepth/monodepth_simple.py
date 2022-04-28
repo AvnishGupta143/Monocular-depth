@@ -65,8 +65,8 @@ def test_simple(params):
     """Test function."""
 
     left  = tf.placeholder(tf.float32, [2, args.input_height, args.input_width, 3])
-    segmented  = tf.placeholder(tf.float32, [1, args.input_height, args.input_width, 3])
-    model = MonodepthModel(params, "test", left, None, segmented)
+    # segmented  = tf.placeholder(tf.float32, [1, args.input_height, args.input_width, 3])
+    model = MonodepthModel(params, "test", left, None, None)
 
     input_image = scipy.misc.imread(args.image_path, mode="RGB")
     original_height, original_width, num_channels = input_image.shape
@@ -115,17 +115,18 @@ def test_simple(params):
 
     # train_saver.restore(sess, restore_path)
 
-    disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
-    # disp, seg = sess.run(model.dual_output, feed_dict={left: input_images, segmented: input_images})
+    # disp = sess.run(model.disp_left_est[0], feed_dict={left: input_images})
+    disp, seg = sess.run(model.dual_output, feed_dict={left: input_images})
 
     disp_pp = post_process_disparity(disp.squeeze()).astype(np.float32)
 
     output_directory = os.path.dirname(args.image_path)
     output_name = os.path.splitext(os.path.basename(args.image_path))[0]
 
-    np.save(os.path.join(output_directory, "{}_disp.npy".format(output_name)), disp_pp)
+    np.save(os.path.join(output_directory, "{}_disp_seg.npy".format(output_name)), disp_pp)
     disp_to_img = scipy.misc.imresize(disp_pp.squeeze(), [original_height, original_width])
-    plt.imsave(os.path.join(output_directory, "{}_disp.png".format(output_name)), disp_to_img, cmap='plasma')
+    plt.imsave(os.path.join(output_directory, "{}_disp_seg_apr27.png".format(output_name)), disp_to_img, cmap='plasma')
+    plt.imsave(os.path.join(output_directory, "{}_seg_seg_apr27.png".format(output_name)), seg[0].argmax(axis=2), cmap='plasma')
 
     print('done!')
 

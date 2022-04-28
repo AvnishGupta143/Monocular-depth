@@ -46,7 +46,7 @@ class MonodepthModel(object):
         self.left = left
         self.right = right
         self.segmented = segmented
-        self.NUM_SEMANTIC_CLASSES = 32  # TODO: pass this in?
+        self.NUM_SEMANTIC_CLASSES = 34  # TODO: pass this in?
         self.model_collection = ['model_' + str(model_index)]
 
         self.reuse_variables = reuse_variables
@@ -261,20 +261,22 @@ class MonodepthModel(object):
             # self.disp3_semantic = self.get_disp(iconv3_semantic)  # Removed disp section from semantic
             # udisp3_semantic  = self.upsample_nn(self.disp3_semantic, 2)  # Removed disp section from semantic
 
-            upconv2_semantic = upconv(iconv3_semantic, 32, 3, 2)  # H/2
+            upconv2_semantic = upconv(iconv3_semantic, 64, 3, 2)  # H/2
             # concat2_semantic = tf.concat([upconv2_semantic, skip1, udisp3_semantic], 3)  # Removed disp section from semantic
             concat2_semantic = tf.concat([upconv2_semantic, skip1], 3)
-            iconv2_semantic = conv(concat2_semantic, 32, 3, 1)
+            iconv2_semantic = conv(concat2_semantic, 64, 3, 1)
             # self.disp2_semantic = self.get_disp(iconv2_semantic)  # Removed disp section from semantic
             # udisp2_semantic  = self.upsample_nn(self.disp2_semantic, 2)  # Removed disp section from semantic
 
-            upconv1_semantic = upconv(iconv2_semantic, 16, 3, 2)  # H
+            upconv1_semantic = upconv(iconv2_semantic, 64, 3, 2)  # H
             # concat1_semantic = tf.concat([upconv1_semantic, udisp2_semantic], 3)  # Removed disp section from semantic
             # concat1_semantic = tf.concat([upconv1_semantic], 3)
-            iconv1_semantic = conv(upconv1_semantic, self.NUM_SEMANTIC_CLASSES, 1, 1, activation_fn=tf.nn.softmax)
+            iconv1_semantic = conv(upconv1_semantic, self.NUM_SEMANTIC_CLASSES, 1, 1, activation_fn=None)
             # self.disp1_semantic = self.get_disp(iconv1_semantic)  # Removed disp section from semantic
 
-            self.seg_decoder_out = iconv1_semantic
+            self.seg_decoder_preactivation_out = iconv1_semantic
+
+            self.semantic_softmax_out = tf.nn.softmax(self.seg_decoder_preactivation_out)
 
     def build_resnet50(self):
         # set convenience functions
@@ -356,19 +358,19 @@ class MonodepthModel(object):
                 # self.disp3_semantic = self.get_disp(iconv3_semantic)  # Removed disp section from semantic
                 # udisp3_semantic = self.upsample_nn(self.disp3_semantic, 2)  # Removed disp section from semantic
 
-                upconv2_semantic = upconv(iconv3_semantic, 32, 3, 2)  # H/2
+                upconv2_semantic = upconv(iconv3_semantic, 64, 3, 2)  # H/2
                 # concat2_semantic = tf.concat([upconv2_semantic, skip1, udisp3_semantic], 3)  # Removed disp section from semantic
                 concat2_semantic = tf.concat([upconv2_semantic, skip1], 3)
-                iconv2_semantic = conv(concat2_semantic, 32, 3, 1)
+                iconv2_semantic = conv(concat2_semantic, 64, 3, 1)
                 # self.disp2_semantic = self.get_disp(iconv2_semantic)  # Removed disp section from semantic
                 # udisp2_semantic = self.upsample_nn(self.disp2_semantic, 2)  # Removed disp section from semantic
 
-                upconv1_semantic = upconv(iconv2_semantic, 16, 3, 2)  # H
+                upconv1_semantic = upconv(iconv2_semantic, 64, 3, 2)  # H
                 # concat1_semantic = tf.concat([upconv1_semantic, udisp2_semantic], 3)  # Removed disp section from semantic
                 concat1_semantic = tf.concat([upconv1_semantic], 3)
-                iconv1_semantic = conv(concat1_semantic, 16, 3, 1)
+                iconv1_semantic = conv(concat1_semantic, 64, 3, 1)
                 # self.disp1_semantic = self.get_disp(iconv1_semantic)
-                self.seg_decoder_out = iconv1_semantic
+                self.seg_decoder_preactivation_out = iconv1_semantic
 
     def build_model(self):
         with slim.arg_scope([slim.conv2d, slim.conv2d_transpose], activation_fn=tf.nn.elu):
@@ -399,10 +401,10 @@ class MonodepthModel(object):
             self.disp_right_est = [tf.expand_dims(d[:, :, :, 1], 3) for d in self.disp_est]
 
         with tf.variable_scope('segmentation'):
-            self.segmentation = self.seg_decoder_out
+            self.segmentation = self.semantic_softmax_out
 
         with tf.variable_scope('dual_output'):
-            self.dual_output = [self.disp_left_est[0], self.segmentation]
+            self.dual_output = [self.disp_left_est[0], self.seg_decoder_preactivation_out]
 
         if self.mode == 'test':
             return
@@ -462,14 +464,17 @@ class MonodepthModel(object):
 
             # (ADDED) Segmentation LOSS
             # TODO: finish this and check it
-            self.seg_loss = tf.losses.sparse_softmax_cross_entropy(self.segmented, self.seg_decoder_out)
+            self.seg_loss = tf.losses.sparse_softmax_cross_entropy(self.segmented, self.seg_decoder_preactivation_out)
+
+            # TODO: adjust multipliers for losses to proper scales
+            SEGMENTATION_LOSS_SCALER = 5
+            DEPTH_LOSS_SCALER = 1
 
             # TOTAL LOSS
             self.subtotal_depth_losses = self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss
-            # TODO: adjust multipliers for losses to proper scales
-            SEGMENTATION_LOSS_SCALER = 1
-            DEPTH_LOSS_SCALER = 1
-            self.total_loss = self.subtotal_depth_losses * DEPTH_LOSS_SCALER + self.seg_loss * SEGMENTATION_LOSS_SCALER
+            self.subtotal_depth_losses *= DEPTH_LOSS_SCALER
+            self.seg_loss *= SEGMENTATION_LOSS_SCALER
+            self.total_loss = self.subtotal_depth_losses + self.seg_loss
 
     def build_summaries(self):
         # SUMMARIES

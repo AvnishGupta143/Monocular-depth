@@ -35,8 +35,8 @@ parser.add_argument('--data_path',                 type=str,   help='path to the
 parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file', required=True)
 parser.add_argument('--input_height',              type=int,   help='input height', default=128)
 parser.add_argument('--input_width',               type=int,   help='input width', default=256)
-parser.add_argument('--batch_size',                type=int,   help='batch size', default=1)
-parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=50)
+parser.add_argument('--batch_size',                type=int,   help='batch size', default=8)
+parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=200)
 parser.add_argument('--learning_rate',             type=float, help='initial learning rate', default=1e-4)
 parser.add_argument('--lr_loss_weight',            type=float, help='left-right consistency weight', default=1.0)
 parser.add_argument('--alpha_image_loss',          type=float, help='weight between SSIM and L1 in the image loss', default=0.85)
@@ -69,6 +69,28 @@ def count_text_lines(file_path):
     lines = f.readlines()
     f.close()
     return len(lines)
+
+# Credit to: https://gist.github.com/iganichev/d2d8a0b1abc6b15d4a07de83171163d4
+def optimistic_restore(save_file):
+    reader = tf.train.NewCheckpointReader(save_file)
+    saved_shapes = reader.get_variable_to_shape_map()
+    var_names = sorted([(var.name, var.name.split(':')[0]) for
+                        var in tf.global_variables()
+                        if var.name.split(':')[0] in saved_shapes])
+    restore_vars = []
+    name2var = dict(zip(map(lambda x: x.name.split(':')[0],
+                            tf.global_variables()),
+                        tf.global_variables()))
+    with tf.variable_scope('', reuse=True):
+        for var_name, saved_var_name in var_names:
+            curr_var = name2var[saved_var_name]
+            var_shape = curr_var.get_shape().as_list()
+            if var_shape == saved_shapes[saved_var_name]:
+                restore_vars.append(curr_var)
+
+    saver = tf.train.Saver(restore_vars)
+    return saver
+
 
 def train(params):
     """Training loop."""
@@ -105,15 +127,23 @@ def train(params):
 
         tower_grads  = []
         tower_losses = []
+        depth_losses = []
+        seg_losses = []
         reuse_variables = None
         with tf.variable_scope(tf.get_variable_scope()):
             for i in range(args.num_gpus):
-                with tf.device('/gpu:%d' % i):
+                with tf.device('/cpu:%d' % i):
 
                     model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], semantic_splits[i], reuse_variables, i)
 
                     loss = model.total_loss
+
                     tower_losses.append(loss)
+
+                    depth_loss = model.subtotal_depth_losses
+                    seg_loss = model.seg_loss
+                    depth_losses.append(depth_loss)
+                    seg_losses.append(seg_loss)
 
                     reuse_variables = True
 
@@ -126,9 +156,13 @@ def train(params):
         apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)
 
         total_loss = tf.reduce_mean(tower_losses)
+        depth_loss_sub = tf.reduce_mean(depth_losses)
+        seg_loss_sub = tf.reduce_mean(seg_losses)
 
         tf.summary.scalar('learning_rate', learning_rate, ['model_0'])
         tf.summary.scalar('total_loss', total_loss, ['model_0'])
+        tf.summary.scalar('depth_loss_sub', depth_loss_sub, ['model_0'])
+        tf.summary.scalar('seg_loss_sub', seg_loss_sub, ['model_0'])
         summary_op = tf.summary.merge_all('model_0')
 
         # SESSION
@@ -153,24 +187,29 @@ def train(params):
 
         # LOAD CHECKPOINT IF SET
         if args.checkpoint_path != '':
+            #train_saver = optimistic_restore(args.checkpoint_path.split(".")[0])
             train_saver.restore(sess, args.checkpoint_path.split(".")[0])
 
             if args.retrain:
                 sess.run(global_step.assign(0))
+
+        #else:
+        #    train_saver = tf.train.Saver()
 
         # GO!
         start_step = global_step.eval(session=sess)
         start_time = time.time()
         for step in range(start_step, num_total_steps):
             before_op_time = time.time()
-            _, loss_value = sess.run([apply_gradient_op, total_loss])
+            _, loss_value, d_loss, s_loss = sess.run([apply_gradient_op, total_loss, depth_loss_sub, seg_loss_sub])
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
                 examples_per_sec = params.batch_size / duration
                 time_sofar = (time.time() - start_time) / 3600
                 training_time_left = (num_total_steps / step - 1.0) * time_sofar
                 print_string = 'batch {:>6} | examples/s: {:4.2f} | loss: {:.5f} | time elapsed: {:.2f}h | time left: {:.2f}h'
-                print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left))
+                print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left), end="")
+                print("  depth_loss: {}, sg_loss: {}".format(d_loss, s_loss))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
             if step and step % 10000 == 0:
