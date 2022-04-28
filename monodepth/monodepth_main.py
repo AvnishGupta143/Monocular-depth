@@ -125,10 +125,10 @@ def train(params):
                 # for i in range(args.num_gpus):
             # for j, h in enumerate(['/gpu:8','/gpu:9']):
             for i in range(args.num_gpus):
-                with tf.device('/gpu:%d' % i):
+                with tf.device('/gpu:%d' % (9+i)):
                 # with tf.device('/gpu:9'):
                     print("main:130. Start model()")
-                    model = MonodepthModel(params, args.mode, left_splits[0], right_splits[0], reuse_variables,0)
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], reuse_variables,0)
                     print("created model")
                     loss = model.total_loss
                     tower_losses.append(loss)
@@ -139,7 +139,7 @@ def train(params):
 
                     tower_grads.append(grads)
 
-        print("~~~~~~~~~~~~GRADS~~~~~~~~~~~~~\n", tower_grads)
+        # print("~~~~~~~~~~~~GRADS~~~~~~~~~~~~~\n", tower_grads)
         grads = average_gradients(tower_grads)
 
         apply_gradient_op = opt_step.apply_gradients(grads, global_step=global_step)

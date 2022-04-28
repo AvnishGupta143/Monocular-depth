@@ -30,11 +30,14 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Reshape, Activation, Conv2D, Input, MaxPooling2D, BatchNormalization, Flatten, Dense, Lambda
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.models import load_model
+import os
 
 import matplotlib.pyplot as plt
 
 from bilinear_sampler import *
 
+# os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_cpu_global_jit'
 monodepth_parameters = namedtuple('parameters', 
                         'encoder, '
                         'height, width, '
@@ -114,6 +117,13 @@ class MonodepthModel(object):
         self.left = left
         self.right = right
         self.model_collection = ['model_' + str(model_index)]
+        self.model_input = self.left
+        self.unet_model = self.get_model()
+        self.unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
+        for layer in self.unet_model.layers:
+            layer.trainable = False
+        self.skipSemantic5 = tf.keras.models.Model(inputs = self.unet_model.input, outputs = self.unet_model.get_layer('batch_normalization_8').output)
+        self.skipSemantic5Output = self.skipSemantic5(self.model_input)
         # self.skipSemantic5 = skipSemantic5
 
         self.reuse_variables = reuse_variables
@@ -243,9 +253,10 @@ class MonodepthModel(object):
 
     def get_model(self):
         print("inside get_model()")
+        # model_input = tf.keras.layers.Input(shape=(256, 256, 3))
         model_input = self.model_input # tf.keras.layers.Input(shape=(256, 256, 3))
 
-            # Entry block
+        # Entry block
         x = layers.Conv2D(32, 3, strides=2, padding="same")(model_input)
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
@@ -295,140 +306,8 @@ class MonodepthModel(object):
         print("finished building outputs\n", outputs)
         model = keras.Model(inputs=model_input, outputs=outputs)
         print("built keras model")
+        print(model.summary())
         return model
-    # def create_model(self):
-
-    #     inputs = tf.keras.layers.Input(shape=(256, 256, 3))
-    
-    #     x = tf.keras.layers.Conv2D(64, 3, padding='same', activation='relu')(inputs)
-    #     x = tf.keras.layers.BatchNormalization()(x)    
-    #     x = tf.keras.layers.Conv2D(64, 3, padding='same', activation='relu')(x)
-    #     x = tf.keras.layers.BatchNormalization()(x)
-
-    #     x1 = tf.keras.layers.MaxPooling2D(padding='same')(x)
-        
-    #     x1 = tf.keras.layers.Conv2D(128, 3, padding='same', activation='relu')(x1)
-    #     x1 = tf.keras.layers.BatchNormalization()(x1)    
-    #     x1 = tf.keras.layers.Conv2D(128, 3, padding='same', activation='relu')(x1)
-    #     x1= tf.keras.layers.BatchNormalization()(x1)
-            
-    #     x2 = tf.keras.layers.MaxPooling2D(padding='same')(x1)
-        
-    #     x2 = tf.keras.layers.Conv2D(256, 3, padding='same', activation='relu')(x2)
-    #     x2 = tf.keras.layers.BatchNormalization()(x2)    
-    #     x2 = tf.keras.layers.Conv2D(256, 3, padding='same', activation='relu')(x2)
-    #     x2= tf.keras.layers.BatchNormalization()(x2)
-        
-    #     x3 = tf.keras.layers.MaxPooling2D(padding='same')(x2)
-        
-    #     x3 = tf.keras.layers.Conv2D(512, 3, padding='same', activation='relu')(x3)
-    #     x3 = tf.keras.layers.BatchNormalization()(x3)    
-    #     x3 = tf.keras.layers.Conv2D(512, 3, padding='same', activation='relu')(x3)
-    #     x3= tf.keras.layers.BatchNormalization()(x3)
-        
-    #     x4 = tf.keras.layers.MaxPooling2D(padding='same')(x3)
-        
-    #     x4 = tf.keras.layers.Conv2D(1024, 3, padding='same', activation='relu')(x4)
-    #     x4 = tf.keras.layers.BatchNormalization()(x4)    
-    #     x4 = tf.keras.layers.Conv2D(1024, 3, padding='same', activation='relu')(x4)
-    #     x4= tf.keras.layers.BatchNormalization()(x4)
-
-    #     x5 = tf.keras.layers.Conv2DTranspose(512, 2, strides=2, padding='same', activation='relu')(x4)
-    #     x5 = tf.keras.layers.BatchNormalization()(x5)
-
-    #     x6 = tf.concat([x3, x5], axis=-1)
-        
-    #     x6 = tf.keras.layers.Conv2D(512, 3, padding='same', activation='relu')(x6)
-    #     x6 = tf.keras.layers.BatchNormalization()(x6)    
-    #     x6 = tf.keras.layers.Conv2D(512, 3, padding='same', activation='relu')(x6)
-    #     x6= tf.keras.layers.BatchNormalization()(x6)
-        
-    #     x7= tf.keras.layers.Conv2DTranspose(256, 2, strides=2, padding='same', activation='relu')(x6)
-    #     x7 = tf.keras.layers.BatchNormalization()(x7)
-
-    #     x8 = tf.concat([x2, x7], axis=-1)  
-        
-    #     x8 = tf.keras.layers.Conv2D(256, 3, padding='same', activation='relu')(x8)
-    #     x8 = tf.keras.layers.BatchNormalization()(x8)    
-    #     x8 = tf.keras.layers.Conv2D(256, 3, padding='same', activation='relu')(x8)
-    #     x8= tf.keras.layers.BatchNormalization()(x8)
-        
-    #     x9= tf.keras.layers.Conv2DTranspose(128, 2, strides=2, padding='same', activation='relu')(x8)
-    #     x9 = tf.keras.layers.BatchNormalization()(x9)
-
-    #     x10 = tf.concat([x1, x9], axis=-1)
-        
-    #     x10 = tf.keras.layers.Conv2D(128, 3, padding='same', activation='relu')(x10)
-    #     x10 = tf.keras.layers.BatchNormalization()(x10)    
-    #     x10 = tf.keras.layers.Conv2D(128, 3, padding='same', activation='relu')(x10)
-    #     x10 = tf.keras.layers.BatchNormalization()(x10)
-    
-        
-    #     x11= tf.keras.layers.Conv2DTranspose(64, 2, strides=2, padding='same',
-    #                                         activation='relu')(x10)
-    #     x11 = tf.keras.layers.BatchNormalization()(x11)
-
-    #     x11 = tf.concat([x, x11], axis=-1)
-        
-    #     x12 = tf.keras.layers.Conv2D(64, 3, padding='same', activation='relu')(x11)
-    #     x12 = tf.keras.layers.BatchNormalization()(x12)    
-    #     x12 = tf.keras.layers.Conv2D(64, 3, padding='same', activation='relu')(x12)
-    #     x12 = tf.keras.layers.BatchNormalization()(x12)
-        
-    #     output = tf.keras.layers.Conv2D(34, 1, padding='same', activation='softmax')(x12)
-        
-    #     return tf.keras.Model(inputs=inputs, outputs=output)
-
-
-    # def get_model(self):
-    #     # inputs = tf.keras.layers.Input(shape=(256, 256, 3))
-
-    #     # Entry block
-    #     x = layers.Conv2D(32, 3, strides=2, padding="same")(self.model_input)
-    #     x = layers.BatchNormalization()(x)
-    #     x = layers.Activation("relu")(x)
-
-    #     previous_block_activation = x  # Set aside residual
-
-    #     for filters in [64, 128, 256]:
-    #         x = layers.Activation("relu")(x)
-    #         x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-    #         x = layers.BatchNormalization()(x)
-
-    #         x = layers.Activation("relu")(x)
-    #         x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-    #         x = layers.BatchNormalization()(x)
-
-    #         x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
-
-    #         # Project residual
-    #         residual = layers.Conv2D(filters, 1, strides=2, padding="same")(
-    #             previous_block_activation
-    #         )
-
-    #         x = layers.add([x, residual])  # Add back residual
-    #         previous_block_activation = x
-
-    #     for filters in [256, 128, 64, 32]:
-    #         x = layers.Activation("relu")(x)
-    #         x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
-    #         x = layers.BatchNormalization()(x)
-
-    #         x = layers.Activation("relu")(x)
-    #         x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
-    #         x = layers.BatchNormalization()(x)
-
-    #         x = layers.UpSampling2D(2)(x)
-
-    #             # Project residual
-    #         residual = layers.UpSampling2D(2)(previous_block_activation)
-    #         residual = layers.Conv2D(filters, 1, padding="same")(residual)
-    #         x = layers.add([x, residual])  # Add back residual
-    #         previous_block_activation = x 
-
-    #     outputs = layers.Conv2D(20, 3, activation="softmax", padding="same")(x)
-    #     model = keras.Model(self.model_input, outputs)
-    #     return model
 
     def build_vgg(self):
         #set convenience functions
@@ -439,15 +318,15 @@ class MonodepthModel(object):
             upconv = self.upconv
 
         print('load unet (next is var_scope')
-        with tf.variable_scope('semantic-encoder'):
-            unet_model = self.get_model()
-            print("load unet")
-            unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
-            for layer in unet_model.layers:
-                layer.trainable = False
+        # with tf.variable_scope('semantic-encoder'):
+        #     unet_model = self.get_model()
+        #     print("load unet")
+        #     unet_model.load_weights('UNetSegmentationAdamDiceLoss.h5')
+            # for layer in unet_model.layers:
+            #     layer.trainable = False
 
-            skipSemantic5 = tf.keras.models.Model(inputs=unet_model.input, outputs=unet_model.get_layer('batch_normalization_8').output)
-            print("skipSemantic5")
+            # skipSemantic5 = tf.keras.models.Model(inputs = unet_model.input, outputs = unet_model.get_layer('batch_normalization_8').output)
+            # print("skipSemantic5")
 
 
             # unet_model = self.create_model()
@@ -474,7 +353,7 @@ class MonodepthModel(object):
 
         #     # 16 X 16
             # skipSemantic5 = tf.keras.models.Model(inputs=unet_model.input, outputs=unet_model.get_layer('batch_normalization_8').output)
-            skipSemantic5Output = skipSemantic5(self.model_input)
+            # skipSemantic5Output = skipSemantic5(self.model_input)
 
     
         with tf.variable_scope('encoder'):
@@ -507,7 +386,7 @@ class MonodepthModel(object):
             concat5 = tf.concat([upconv5, skip4], 3)
             # passing skipSemantic5 into a convolution layer to make the channels 256
             # convskip = conv(skipSemantic5,  256, 3, 1)
-            concatsemantic5 = tf.concat([concat5, skipSemantic5Output], 3)
+            concatsemantic5 = tf.concat([concat5, self.skipSemantic5Output], 3)
             iconv5  = conv(concatsemantic5,  256, 3, 1)
             # iconv5  = conv(concat5,  256, 3, 1)
 
@@ -600,8 +479,8 @@ class MonodepthModel(object):
 
                 if self.params.do_stereo:
                     self.model_input = tf.concat([self.left, self.right], 3)
-                else:
-                    self.model_input = self.left
+                # else:
+                #     self.model_input = self.left
 
                 #build model
                 if self.params.encoder == 'vgg':
