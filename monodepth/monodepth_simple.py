@@ -28,17 +28,17 @@ from monodepth_dataloader import *
 from average_gradients import *
 
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        # Currently, memory growth needs to be the same across GPUs
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-    except RuntimeError as e:
-        # Memory growth must be set before GPUs have been initialized
-        print(e)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#     try:
+#         # Currently, memory growth needs to be the same across GPUs
+#         for gpu in gpus:
+#             tf.config.experimental.set_memory_growth(gpu, True)
+#         logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+#         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+#     except RuntimeError as e:
+#         # Memory growth must be set before GPUs have been initialized
+#         print(e)
 
 
 parser = argparse.ArgumentParser(description='Monodepth TensorFlow implementation.')
@@ -123,7 +123,7 @@ def test_simple(params):
     output_directory = os.path.dirname(args.image_path)
     output_name = os.path.splitext(os.path.basename(args.image_path))[0]
 
-    np.save(os.path.join(output_directory, "{}_disp_seg.npy".format(output_name)), disp_pp)
+    # np.save(os.path.join(output_directory, "{}_disp_seg_apr27_10.npy".format(output_name)), disp_pp)
     disp_to_img = scipy.misc.imresize(disp_pp.squeeze(), [original_height, original_width])
     plt.imsave(os.path.join(output_directory, "{}_disp_seg_apr27.png".format(output_name)), disp_to_img, cmap='plasma')
     plt.imsave(os.path.join(output_directory, "{}_seg_seg_apr27.png".format(output_name)), seg[0].argmax(axis=2), cmap='plasma')

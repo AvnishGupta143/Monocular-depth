@@ -467,7 +467,7 @@ class MonodepthModel(object):
             self.seg_loss = tf.losses.sparse_softmax_cross_entropy(self.segmented, self.seg_decoder_preactivation_out)
 
             # TODO: adjust multipliers for losses to proper scales
-            SEGMENTATION_LOSS_SCALER = 5
+            SEGMENTATION_LOSS_SCALER = 1
             DEPTH_LOSS_SCALER = 1
 
             # TOTAL LOSS
