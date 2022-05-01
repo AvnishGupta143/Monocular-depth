@@ -66,7 +66,7 @@ def test_simple(params):
 
     left  = tf.placeholder(tf.float32, [2, args.input_height, args.input_width, 3])
     # segmented  = tf.placeholder(tf.float32, [1, args.input_height, args.input_width, 3])
-    model = MonodepthModel(params, "test", left, None, None)
+    model = MonodepthModel(params, "test", left, None, None, None)
 
     input_image = scipy.misc.imread(args.image_path, mode="RGB")
     original_height, original_width, num_channels = input_image.shape
@@ -147,7 +147,9 @@ def main(_):
         lr_loss_weight=0,
         full_summary=False)
 
-    test_simple(params)
+    with tf.device('/cpu:0'):
+        test_simple(params)
 
 if __name__ == '__main__':
-    tf.app.run()
+    with tf.device('/cpu:0'):
+        tf.app.run()

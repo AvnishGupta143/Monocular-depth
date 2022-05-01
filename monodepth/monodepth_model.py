@@ -40,12 +40,13 @@ monodepth_parameters = namedtuple('parameters',
 class MonodepthModel(object):
     """monodepth model"""
 
-    def __init__(self, params, mode, left, right, segmented, reuse_variables=None, model_index=0):
+    def __init__(self, params, mode, left, right, segmented, segmented_one_hot, reuse_variables=None, model_index=0):
         self.params = params
         self.mode = mode
         self.left = left
         self.right = right
         self.segmented = segmented
+        self.segmented_one_hot = segmented_one_hot
         self.NUM_SEMANTIC_CLASSES = 34  # TODO: pass this in?
         self.model_collection = ['model_' + str(model_index)]
 
@@ -123,6 +124,32 @@ class MonodepthModel(object):
         smoothness_x = [disp_gradients_x[i] * weights_x[i] for i in range(4)]
         smoothness_y = [disp_gradients_y[i] * weights_y[i] for i in range(4)]
         return smoothness_x + smoothness_y
+
+    def soft_dice_loss(self, y_true, y_pred, epsilon=1e-6):
+        '''
+        Soft dice loss calculation for arbitrary batch size, number of classes, and number of spatial dimensions.
+        Assumes the `channels_last` format.
+
+        # Arguments
+            y_true: b x X x Y( x Z...) x c One hot encoding of ground truth
+            y_pred: b x X x Y( x Z...) x c Network output, must sum to 1 over c channel (such as after softmax)
+            epsilon: Used for numerical stability to avoid divide by zero errors
+
+        # References
+            V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation
+            https://arxiv.org/abs/1606.04797
+            More details on Dice loss formulation
+            https://mediatum.ub.tum.de/doc/1395260/1395260.pdf (page 72)
+
+            Adapted from https://github.com/Lasagne/Recipes/issues/99#issuecomment-347775022
+        '''
+
+        # skip the batch and class axis for calculating Dice score
+        axes = tuple(range(1, len(y_pred.shape) - 1))
+        numerator = 2. * tf.reduce_sum(y_pred * y_true, axes)
+        denominator = tf.reduce_sum(tf.square(y_pred) + tf.square(y_true), axes)
+
+        return 1 - tf.reduce_mean((numerator + epsilon) / (denominator + epsilon))  # average over classes and batch
 
     def get_disp(self, x):
         disp = 0.3 * self.conv(x, 2, 3, 1, tf.nn.sigmoid)
@@ -464,15 +491,17 @@ class MonodepthModel(object):
 
             # (ADDED) Segmentation LOSS
             # TODO: finish this and check it
-            self.seg_loss = tf.losses.sparse_softmax_cross_entropy(self.segmented, self.seg_decoder_preactivation_out)
+            self.seg_loss_ce = tf.losses.sparse_softmax_cross_entropy(self.segmented, self.seg_decoder_preactivation_out)
+            self.seg_loss_dice = self.soft_dice_loss(self.segmented_one_hot, self.semantic_softmax_out)
 
             # TODO: adjust multipliers for losses to proper scales
-            SEGMENTATION_LOSS_SCALER = 1
+            SEGMENTATION_LOSS_SCALER = 0.5
             DEPTH_LOSS_SCALER = 1
 
             # TOTAL LOSS
             self.subtotal_depth_losses = self.image_loss + self.params.disp_gradient_loss_weight * self.disp_gradient_loss + self.params.lr_loss_weight * self.lr_loss
             self.subtotal_depth_losses *= DEPTH_LOSS_SCALER
+            self.seg_loss = self.seg_loss_ce + self.seg_loss_dice
             self.seg_loss *= SEGMENTATION_LOSS_SCALER
             self.total_loss = self.subtotal_depth_losses + self.seg_loss
 

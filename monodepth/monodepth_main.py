@@ -35,8 +35,8 @@ parser.add_argument('--data_path',                 type=str,   help='path to the
 parser.add_argument('--filenames_file',            type=str,   help='path to the filenames text file', required=True)
 parser.add_argument('--input_height',              type=int,   help='input height', default=128)
 parser.add_argument('--input_width',               type=int,   help='input width', default=256)
-parser.add_argument('--batch_size',                type=int,   help='batch size', default=8)
-parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=200)
+parser.add_argument('--batch_size',                type=int,   help='batch size', default=4)
+parser.add_argument('--num_epochs',                type=int,   help='number of epochs', default=500)
 parser.add_argument('--learning_rate',             type=float, help='initial learning rate', default=1e-4)
 parser.add_argument('--lr_loss_weight',            type=float, help='left-right consistency weight', default=1.0)
 parser.add_argument('--alpha_image_loss',          type=float, help='weight between SSIM and L1 in the image loss', default=0.85)
@@ -119,22 +119,26 @@ def train(params):
         left  = dataloader.left_image_batch
         right = dataloader.right_image_batch
         semantic = tf.cast(dataloader.semantic_image_batch, tf.int32)  # [:, :, 0]
+        semantic_one_hot = dataloader.semantic_one_hot_batch
 
         # split for each gpu
         left_splits  = tf.split(left,  args.num_gpus, 0)
         right_splits = tf.split(right, args.num_gpus, 0)
         semantic_splits = tf.split(semantic, args.num_gpus, 0)
+        semantic_one_hot_splits = tf.split(semantic_one_hot, args.num_gpus, 0)
 
         tower_grads  = []
         tower_losses = []
         depth_losses = []
         seg_losses = []
+        seg_losses_dice = []
+        seg_losses_ce = []
         reuse_variables = None
         with tf.variable_scope(tf.get_variable_scope()):
             for i in range(args.num_gpus):
-                with tf.device('/cpu:%d' % i):
+                with tf.device('/gpu:%d' % i):
 
-                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], semantic_splits[i], reuse_variables, i)
+                    model = MonodepthModel(params, args.mode, left_splits[i], right_splits[i], semantic_splits[i], semantic_one_hot_splits[i], reuse_variables, i)
 
                     loss = model.total_loss
 
@@ -144,6 +148,8 @@ def train(params):
                     seg_loss = model.seg_loss
                     depth_losses.append(depth_loss)
                     seg_losses.append(seg_loss)
+                    seg_losses_dice.append(model.seg_loss_dice)
+                    seg_losses_ce.append(model.seg_loss_ce)
 
                     reuse_variables = True
 
@@ -158,11 +164,15 @@ def train(params):
         total_loss = tf.reduce_mean(tower_losses)
         depth_loss_sub = tf.reduce_mean(depth_losses)
         seg_loss_sub = tf.reduce_mean(seg_losses)
+        seg_loss_dice_sub = tf.reduce_mean(seg_losses_dice)
+        seg_loss_ce_sub = tf.reduce_mean(seg_losses_ce)
 
         tf.summary.scalar('learning_rate', learning_rate, ['model_0'])
         tf.summary.scalar('total_loss', total_loss, ['model_0'])
         tf.summary.scalar('depth_loss_sub', depth_loss_sub, ['model_0'])
         tf.summary.scalar('seg_loss_sub', seg_loss_sub, ['model_0'])
+        tf.summary.scalar('seg_loss_dice_sub', seg_loss_dice_sub, ['model_0'])
+        tf.summary.scalar('seg_loss_ce_sub', seg_loss_ce_sub, ['model_0'])
         summary_op = tf.summary.merge_all('model_0')
 
         # SESSION
@@ -201,7 +211,8 @@ def train(params):
         start_time = time.time()
         for step in range(start_step, num_total_steps):
             before_op_time = time.time()
-            _, loss_value, d_loss, s_loss = sess.run([apply_gradient_op, total_loss, depth_loss_sub, seg_loss_sub])
+            _, loss_value, d_loss, s_loss, ce_loss, d_loss = sess.run([apply_gradient_op, total_loss, depth_loss_sub,
+                                                                       seg_loss_sub, seg_loss_ce_sub, seg_loss_dice_sub])
             duration = time.time() - before_op_time
             if step and step % 100 == 0:
                 examples_per_sec = params.batch_size / duration
@@ -209,7 +220,7 @@ def train(params):
                 training_time_left = (num_total_steps / step - 1.0) * time_sofar
                 print_string = 'batch {:>6} | examples/s: {:4.2f} | loss: {:.5f} | time elapsed: {:.2f}h | time left: {:.2f}h'
                 print(print_string.format(step, examples_per_sec, loss_value, time_sofar, training_time_left), end="")
-                print("  depth_loss: {}, sg_loss: {}".format(d_loss, s_loss))
+                print("  depth_loss: {:4.4f}, sg_loss: {:4.4f}, ce_loss: {:4.4f}, dice_loss: {:4.4f}".format(d_loss, s_loss, ce_loss, d_loss))
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, global_step=step)
             if step and step % 10000 == 0:
