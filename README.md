@@ -69,5 +69,9 @@ python monodepth_main.py --mode test --data_path ~/data/cityscapes/test/ \
 If your test filenames contain two files per line the model will ignore the second one, unless you use the `--do_stereo` flag.
 The network will output two files `disparities.npy` and `disparities_pp.npy`, respecively for raw and post-processed disparities.
 
-##
+## Semantic Encoder
 Please find the trained model for UNet [here](https://drive.google.com/file/d/1NX7P4lKDTfLq5V8J-g7gbetB7pgvDWbJ/view?usp=sharing)
+
+## References
+* http://visual.cs.ucl.ac.uk/pubs/monoDepth/
+* https://arxiv.org/abs/1609.03677
