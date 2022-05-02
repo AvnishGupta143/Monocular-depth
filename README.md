@@ -2,6 +2,14 @@
 
 The core contribution of this work comes from combining monocular depth estimation and semantic segmentation into one multi-task network to improve depth estimation accuracy. We extended the existing Monodepth network by adding a second decoder that is dedicated to the semantic segmentation task. The dual-decoder, multi-task network is trained with a hybrid loss function that combines the original depth-disparity losses from the depth decoder with the softmax cross-entropy loss of the semantic decoder. We also conduct experiments with an additional Dice loss added to the semantic decoder loss, with additional improvements shown.
 
+<p align="center">
+  <img src=images/added_decoder.png">
+</p>
+
+<p align="center">
+  <img src=images/result.png">
+</p>
+
 ## Pretained Monodepth with semantic decoder
 
 * Download the preatined weigths from [here](https://drive.google.com/file/d/1c9wwCP2MtJwdEyeBEmNiLSoicdlr_9XE/view?usp=sharing)
