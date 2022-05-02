@@ -3,11 +3,11 @@
 The core contribution of this work comes from combining monocular depth estimation and semantic segmentation into one multi-task network to improve depth estimation accuracy. We extended the existing Monodepth network by adding a second decoder that is dedicated to the semantic segmentation task. The dual-decoder, multi-task network is trained with a hybrid loss function that combines the original depth-disparity losses from the depth decoder with the softmax cross-entropy loss of the semantic decoder. We also conduct experiments with an additional Dice loss added to the semantic decoder loss, with additional improvements shown.
 
 <p align="center">
-  <img src=images/added_decoder.png">
+  <img src="images/added_decoder.png">
 </p>
 
 <p align="center">
-  <img src=images/result.png">
+  <img src="images/result.png">
 </p>
 
 ## Pretained Monodepth with semantic decoder
@@ -69,5 +69,9 @@ python monodepth_main.py --mode test --data_path ~/data/cityscapes/test/ \
 If your test filenames contain two files per line the model will ignore the second one, unless you use the `--do_stereo` flag.
 The network will output two files `disparities.npy` and `disparities_pp.npy`, respecively for raw and post-processed disparities.
 
-##
+## Semantic Encoder
 Please find the trained model for UNet [here](https://drive.google.com/file/d/1NX7P4lKDTfLq5V8J-g7gbetB7pgvDWbJ/view?usp=sharing)
+
+## References
+* http://visual.cs.ucl.ac.uk/pubs/monoDepth/
+* https://arxiv.org/abs/1609.03677
